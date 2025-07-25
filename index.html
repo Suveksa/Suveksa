@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Maze Game with Clear Path - Created by Suveksathedeveloper</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #222;
+      color: white;
+      font-family: Arial, sans-serif;
+      height: 100vh;
+      margin: 0;
+      user-select: none;
+    }
+    #game {
+      position: relative;
+      width: 340px;
+      height: 340px;
+      background: #eee;
+      border: 3px solid #333;
+      margin-bottom: 10px;
+      touch-action: none;
+    }
+    .wall, .obstacle {
+      position: absolute;
+      background: #333;
+      border-radius: 4px;
+    }
+    .obstacle {
+      background: #d33;
+      animation: obstacleMove 2s infinite alternate;
+    }
+    @keyframes obstacleMove {
+      0% { top: 100px; }
+      100% { top: 220px; }
+    }
+    #player {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      background: #007bff;
+      border-radius: 50%;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      transition: top 0.1s, left 0.1s;
+    }
+    #goal {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      background: #28a745;
+      border-radius: 5px;
+      top: 290px;
+      left: 290px;
+      z-index: 10;
+    }
+    #info {
+      display: flex;
+      justify-content: space-between;
+      width: 340px;
+      margin-bottom: 8px;
+      font-size: 1.1rem;
+    }
+    #message {
+      height: 24px;
+      font-size: 1.2rem;
+      text-align: center;
+      min-width: 340px;
+      margin-bottom: 12px;
+    }
+    button {
+      padding: 8px 16px;
+      font-size: 1rem;
+      cursor: pointer;
+      border: none;
+      background: #007bff;
+      color: white;
+      border-radius: 5px;
+      user-select: none;
+    }
+    footer {
+      margin-top: 15px;
+      font-size: 0.9rem;
+      color: #aaa;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    footer svg {
+      width: 20px;
+      height: 20px;
+      fill: #e25555;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="info">
+    <div>Time Left: <span id="timer">30</span>s</div>
+    <div>Lives: <span id="lives">3</span></div>
+  </div>
+
+  <div id="game" tabindex="0">
+    <!-- Walls with gaps to create a clear maze path -->
+    <div class="wall" style="top: 0; left: 80px; width: 60px; height: 20px;"></div>
+    <div class="wall" style="top: 0; left: 160px; width: 80px; height: 20px;"></div>
+
+    <div class="wall" style="top: 20px; left: 140px; width: 20px; height: 60px;"></div>
+
+    <div class="wall" style="top: 80px; left: 0; width: 20px; height: 220px;"></div>
+    <div class="wall" style="top: 80px; left: 80px; width: 20px; height: 160px;"></div>
+
+    <div class="wall" style="top: 200px; left: 100px; width: 120px; height: 20px;"></div>
+    <div class="wall" style="top: 120px; left: 200px; width: 20px; height: 100px;"></div>
+
+    <div class="wall" style="top: 280px; left: 220px; width: 40px; height: 20px;"></div>
+    <div class="wall" style="top: 260px; left: 260px; width: 20px; height: 40px;"></div>
+
+    <!-- Obstacles -->
+    <div class="obstacle" style="top: 100px; left: 130px; width: 20px; height: 20px;"></div>
+    <div class="obstacle" style="top: 180px; left: 180px; width: 20px; height: 20px; animation-delay: 1s;"></div>
+
+    <div id="player"></div>
+    <div id="goal"></div>
+  </div>
+
+  <div id="message"></div>
+  <button id="restartBtn">Restart Game</button>
+
+  <footer>
+    <span>Created by Suveksathedeveloper</span>
+    <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.41 4.42 3 7.5 3c1.74 0 3.41 0.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.41 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+  </footer>
+
+  <script>
+    const player = document.getElementById('player');
+    const goal = document.getElementById('goal');
+    const walls = Array.from(document.getElementsByClassName('wall'));
+    const obstacles = Array.from(document.getElementsByClassName('obstacle'));
+    const message = document.getElementById('message');
+    const gameArea = document.getElementById('game');
+    const timerDisplay = document.getElementById('timer');
+    const livesDisplay = document.getElementById('lives');
+    const restartBtn = document.getElementById('restartBtn');
+
+    let posX = 10, posY = 10;
+    const step = 10;
+    let timeLeft = 30;
+    let lives = 3;
+    let gameOver = false;
+
+    function rectsOverlap(r1, r2) {
+      return !(r1.right <= r2.left || r1.left >= r2.right || r1.bottom <= r2.top || r1.top >= r2.bottom);
+    }
+
+    function canMove(x, y) {
+      const playerRect = { left: x, top: y, right: x + player.offsetWidth, bottom: y + player.offsetHeight };
+
+      // Check walls
+      for (const wall of walls) {
+        const wallRect = {
+          left: wall.offsetLeft,
+          top: wall.offsetTop,
+          right: wall.offsetLeft + wall.offsetWidth,
+          bottom: wall.offsetTop + wall.offsetHeight
+        };
+        if (rectsOverlap(playerRect, wallRect)) return false;
+      }
+
+      // Check obstacles
+      for (const obs of obstacles) {
+        const obsRect = {
+          left: obs.offsetLeft,
+          top: obs.offsetTop,
+          right: obs.offsetLeft + obs.offsetWidth,
+          bottom: obs.offsetTop + obs.offsetHeight
+        };
+        if (rectsOverlap(playerRect, obsRect)) return false;
+      }
+
+      // Check boundaries
+      if (x < 0 || y < 0 || x + player.offsetWidth > gameArea.clientWidth || y + player.offsetHeight > gameArea.clientHeight) {
+        return false;
+      }
+
+      return true;
+    }
+
+    function checkGoal() {
+      const playerRect = {
+        left: posX,
+        top: posY,
+        right: posX + player.offsetWidth,
+        bottom: posY + player.offsetHeight
+      };
+      const goalRect = {
+        left: goal.offsetLeft,
+        top: goal.offsetTop,
+        right: goal.offsetLeft + goal.offsetWidth,
+        bottom: goal.offsetTop + goal.offsetHeight
+      };
+      if (rectsOverlap(playerRect, goalRect)) {
+        message.textContent = "🎉 You reached the goal! You win!";
+        gameOver = true;
+        clearInterval(timerInterval);
+        document.removeEventListener('keydown', movePlayer);
+      }
+    }
+
+    function loseLife() {
+      lives--;
+      livesDisplay.textContent = lives;
+      if (lives <= 0) {
+        endGame("💀 No lives left! Game over.");
+      } else {
+        // Reset player to start
+        posX = 10;
+        posY = 10;
+        updatePlayerPosition();
+        message.textContent = `😵 You hit an obstacle! Lives left: ${lives}`;
+      }
+    }
+
+    function movePlayer(event) {
+      if (gameOver) return;
+
+      let newX = posX;
+      let newY = posY;
+
+      switch(event.key) {
+        case 'ArrowUp': newY -= step; break;
+        case 'ArrowDown': newY += step; break;
+        case 'ArrowLeft': newX -= step; break;
+        case 'ArrowRight': newX += step; break;
+        default: return;
+      }
+
+      if (canMove(newX, newY)) {
+        posX = newX;
+        posY = newY;
+        updatePlayerPosition();
+        message.textContent = "";
+        checkGoal();
+      } else {
+        // Check if hitting obstacle
+        const playerRect = { left: newX, top: newY, right: newX + player.offsetWidth, bottom: newY + player.offsetHeight };
+        for (const obs of obstacles) {
+          const obsRect = { left: obs.offsetLeft, top: obs.offsetTop, right: obs.offsetLeft + obs.offsetWidth, bottom: obs.offsetTop + obs.offsetHeight };
+          if (rectsOverlap(playerRect, obsRect)) {
+            loseLife();
+            break;
+          }
+        }
+      }
+    }
+
+    function updatePlayerPosition() {
+      player.style.left = posX + "px";
+      player.style.top = posY + "px";
+    }
+
+    function endGame(text) {
+      message.textContent = text;
+      gameOver = true;
+      document.removeEventListener('keydown', movePlayer);
+      clearInterval(timerInterval);
+    }
+
+    function restartGame() {
+      posX = 10;
+      posY = 10;
+      timeLeft = 30;
+      lives = 3;
+      gameOver = false;
+      updatePlayerPosition();
+      timerDisplay.textContent = timeLeft;
+      livesDisplay.textContent = lives;
+      message.textContent = "";
+      document.addEventListener('keydown', movePlayer);
+      clearInterval(timerInterval);
+      timerInterval = setInterval(timerTick, 1000);
+    }
+
+    function timerTick() {
+      if (gameOver) return;
+      timeLeft--;
+      timerDisplay.textContent = timeLeft;
+      if (timeLeft <= 0) {
+        endGame("⏰ Time's up! You lost.");
+      }
+    }
+
+    // Touch controls for mobile
+    let touchStartX = null;
+    let touchStartY = null;
+
+    gameArea.addEventListener('touchstart', e => {
+      if (gameOver) return;
+      const touch = e.touches[0];
+      touchStartX = touch.clientX;
+      touchStartY = touch.clientY;
+    });
+
+    gameArea.addEventListener('touchend', e => {
+      if (gameOver) return;
+      const touch = e.changedTouches[0];
+      const dx = touch.clientX - touchStartX;
+      const dy = touch.clientY - touchStartY;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+
+      if (absDx > 30 || absDy > 30) {
+        if (absDx > absDy) {
+          if (dx > 0) simulateKey('ArrowRight');
+          else simulateKey('ArrowLeft');
+        } else {
+          if (dy > 0) simulateKey('ArrowDown');
+          else simulateKey('ArrowUp');
+        }
+      }
+    });
+
+    function simulateKey(key) {
+      movePlayer({ key });
+    }
+
+    restartBtn.addEventListener('click', () => {
+      restartGame();
+    });
+
+    // Initialize game
+    updatePlayerPosition();
+    document.addEventListener('keydown', movePlayer);
+    let timerInterval = setInterval(timerTick, 1000);
+  </script>
+</body>
+</html>
